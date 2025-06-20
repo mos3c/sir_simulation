@@ -50,6 +50,24 @@ R: Recovered population
 N: Total population (S + I + R = N)
 
 
+Installation
+
+Clone the repository
+
+#git clone https://github.com/mos3c/sir_simulation.git
+#cd sir_simulation
+
+install dependencies
+#pip install -r requirements.txt
+
+run the application
+#python sir_dashboard3.py
+
+open in browser
+#http://localhost:8050
+
+
+
 
 
 
