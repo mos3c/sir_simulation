@@ -471,7 +471,9 @@ app.layout = html.Div([
      Output('speed-control', 'style'),
      Output('population', 'max'),
      Output('visualization-title', 'children')],
-    [Input('simulation-mode', 'value')]
+    [Input('simulation-mode', 'value')],
+    prevent_initial_call=True
+    
 )
 def toggle_simulation_mode(mode):
     if mode == 'animated_people':
@@ -513,7 +515,7 @@ def toggle_simulation_mode(mode):
 @app.callback(
     [Output('sir-graph', 'figure'),
      Output('key-metrics', 'children'),
-     Output('simulation-status', 'children'),
+     Output('simulation-status', 'children', allow_duplicate=True),  # Add allow_duplicate=True here
      Output('animation-data', 'children'),
      Output('graph-animation-data', 'children'),
      Output('people-animation-interval', 'disabled'),
@@ -526,7 +528,9 @@ def toggle_simulation_mode(mode):
      State('initial-infected', 'value'),
      State('beta', 'value'),
      State('gamma', 'value'),
-     State('duration', 'value')]
+     State('duration', 'value')],
+    prevent_initial_call=True
+
 )
 def update_simulation(start_clicks, reset_clicks, pause_clicks, mode, N, I0, beta, gamma, days):
     ctx = callback_context
@@ -603,6 +607,8 @@ def update_simulation(start_clicks, reset_clicks, pause_clicks, mode, N, I0, bet
     return initial_fig, create_empty_metrics(), "Ready to simulate", "", "", True, True
 
 # Callback for graph animation updates
+# Callback for graph animation updates
+# Callback for graph animation updates
 @app.callback(
     [Output('sir-graph', 'figure', allow_duplicate=True),
      Output('graph-animation-data', 'children', allow_duplicate=True),
@@ -612,6 +618,44 @@ def update_simulation(start_clicks, reset_clicks, pause_clicks, mode, N, I0, bet
      State('animation-speed', 'value')],
     prevent_initial_call=True
 )
+def update_graph_animation(n_intervals, graph_data_json, speed):
+    if not graph_data_json:
+        return dash.no_update, dash.no_update, dash.no_update
+
+    try:
+        graph_data = json.loads(graph_data_json)
+        if not graph_data.get('running', False):
+            return dash.no_update, dash.no_update, dash.no_update
+
+        # Calculate day increment based on speed
+        day_increment = max(1, speed // 2)
+        current_day = graph_data['current_day']
+        new_day = min(current_day + day_increment, len(graph_data['time_points']) - 1)
+
+        # Update current day
+        graph_data['current_day'] = new_day
+
+        # Create updated figure
+        S = np.array(graph_data['S'])
+        I = np.array(graph_data['I'])
+        R = np.array(graph_data['R'])
+        time_points = np.array(graph_data['time_points'])
+        metrics = graph_data['metrics']
+
+        fig = create_animated_graph_figure(time_points, S, I, R, new_day, metrics)
+
+        # Check if animation is complete
+        if new_day >= len(time_points) - 1:
+            graph_data['running'] = False
+            status = f"Graph animation complete - Final day: {new_day}"
+        else:
+            status = f"Animating graph - Day: {new_day}"
+
+        return fig, json.dumps(graph_data), status
+
+    except Exception as e:
+        return dash.no_update, dash.no_update, f"Animation error: {str(e)}"
+
 # Add this callback for people animation updates
 @app.callback(
     [Output('day-counter', 'children'),
@@ -777,43 +821,6 @@ app.clientside_callback(
     Output('animation-canvas', 'id'),  # Dummy output
     Input('animation-data', 'children')
 )
-def update_graph_animation(n_intervals, graph_data_json, speed):
-    if not graph_data_json:
-        return dash.no_update, dash.no_update, dash.no_update
-    
-    try:
-        graph_data = json.loads(graph_data_json)
-        if not graph_data.get('running', False):
-            return dash.no_update, dash.no_update, dash.no_update
-        
-        # Calculate day increment based on speed
-        day_increment = max(1, speed // 2)
-        current_day = graph_data['current_day']
-        new_day = min(current_day + day_increment, len(graph_data['time_points']) - 1)
-        
-        # Update current day
-        graph_data['current_day'] = new_day
-        
-        # Create updated figure
-        S = np.array(graph_data['S'])
-        I = np.array(graph_data['I'])
-        R = np.array(graph_data['R'])
-        time_points = np.array(graph_data['time_points'])
-        metrics = graph_data['metrics']
-        
-        fig = create_animated_graph_figure(time_points, S, I, R, new_day, metrics)
-        
-        # Check if animation is complete
-        if new_day >= len(time_points) - 1:
-            graph_data['running'] = False
-            status = f"Graph animation complete - Final day: {new_day}"
-        else:
-            status = f"Animating graph - Day: {new_day}"
-        
-        return fig, json.dumps(graph_data), status
-        
-    except Exception as e:
-        return dash.no_update, dash.no_update, f"Animation error: {str(e)}"
 
 # Helper functions for creating figures and displays
 def create_static_figure(time_points, S, I, R, metrics):
@@ -914,5 +921,3 @@ def create_empty_metrics():
 # Add at the end of the file
 if __name__ == '__main__':
     app.run(debug=True)
-        
-        
